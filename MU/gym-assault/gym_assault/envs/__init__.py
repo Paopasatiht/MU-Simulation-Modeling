@@ -1,1 +1,0 @@
-from gym_assault.envs.assault_env import AssaultEnv

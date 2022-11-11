@@ -1,7 +1,0 @@
-README.md
-setup.py
-gym_assault.egg-info/PKG-INFO
-gym_assault.egg-info/SOURCES.txt
-gym_assault.egg-info/dependency_links.txt
-gym_assault.egg-info/requires.txt
-gym_assault.egg-info/top_level.txt
