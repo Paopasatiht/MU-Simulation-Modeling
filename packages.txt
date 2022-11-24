@@ -4,3 +4,4 @@ simpy
 matplotlib
 Pillow
 tk
+streamlit
