@@ -1,0 +1,6 @@
+numpy
+pandas
+simpy
+matplotlib
+Pillow
+tk
