@@ -55,8 +55,8 @@ SCANNER_STD = 0.01
 # Let's pre-generate all the bus arrival times and their occupancies so that even if we
 # change the configuration, we'll have consistent arrivals
 random.seed(42)
-ARRIVALS = [ random.expovariate(1 / BUS_ARRIVAL_MEAN) for _ in range(40) ]
-ON_BOARD = [ int(random.gauss(BUS_OCCUPANCY_MEAN, BUS_OCCUPANCY_STD)) for _ in range(40) ]
+ARRIVALS = [random.expovariate(1 / BUS_ARRIVAL_MEAN) for _ in range(40)]
+ON_BOARD = [int(random.gauss(BUS_OCCUPANCY_MEAN, BUS_OCCUPANCY_STD)) for _ in range(40)]
 
 # -------------------------
 #  ANALYTICAL GLOBALS
@@ -67,20 +67,51 @@ seller_waits = defaultdict(lambda: [])
 scan_waits = defaultdict(lambda: [])
 event_log = []
 
+
 def register_arrivals(time, num):
+    """
+    when bus arrive we will log the time & amount of people
+    ex. register_arrivals(time, len(people in the bus))
+    """
     arrivals[int(time)] += num
 
+
 def register_seller_wait(time, wait):
+    """
+    Purchasing group of people have to wait ... minutes to pass the seller
+    ex. register_seller_wait(queue_end, wait)
+    """
     seller_waits[int(time)].append(wait)
 
+
 def register_scan_wait(time, wait):
+    """
+    Scanning customer waited {wait} minutes to pass the scan to the event
+    ex. register_scan_wait(queue_end, wait)
+    """
     scan_waits[int(time)].append(wait)
 
+
 def avg_wait(raw_waits):
-    waits = [ w for i in raw_waits.values() for w in i ]
-    return round(np.mean(waits), 1) if len(waits) > 0 else 0
+    """
+    Calculate the average of ... if there is anything in the list
+
+    return : the avg value of input
+    """
+    waits = [w for i in raw_waits.values() for w in i]
+
+    if len(waits) > 0:
+        return round(np.mean(waits), 1)
+    else:
+        return 0
+
 
 def register_bus_arrival(time, bus_id, people_created):
+    """
+    register
+    1. bus arrived time
+    2. amount of people in bus
+    """
     register_arrivals(time, len(people_created))
     print(f"Bus #{bus_id} arrived at {time} with {len(people_created)} people")
     event_log.append({
@@ -90,11 +121,20 @@ def register_bus_arrival(time, bus_id, people_created):
         "peopleCreated": people_created
     })
 
-def register_group_moving_from_bus_to_seller(people, walk_begin, walk_end, seller_line, queue_begin, queue_end, sale_begin, sale_end):
+
+def register_group_moving_from_bus_to_seller(people, walk_begin, walk_end, seller_line, queue_begin, queue_end,
+                                             sale_begin, sale_end):
+    """
+    estimate the time that we have to spend  to move from bus to seller in each seller line by separate to 3 groups from input
+    1. walk to seller
+    2. wait in the seller line
+    3. buy tickets
+    """
     wait = queue_end - queue_begin
     service_time = sale_end - sale_begin
     register_seller_wait(queue_end, wait)
-    print(f"Purchasing group of {len(people)} waited {wait} minutes in Line {seller_line}, needed {service_time} minutes to complete")
+    print(
+        f"Purchasing group of {len(people)} waited {wait} minutes in Line {seller_line}, needed {service_time} minutes to complete")
     event_log.append({
         "event": "WALK_TO_SELLER",
         "people": people,
@@ -117,7 +157,15 @@ def register_group_moving_from_bus_to_seller(people, walk_begin, walk_end, selle
         "duration": round(sale_end - sale_begin, 2)
     })
 
-def register_visitor_moving_to_scanner(person, walk_begin, walk_end, scanner_line, queue_begin, queue_end, scan_begin, scan_end):
+
+def register_visitor_moving_to_scanner(person, walk_begin, walk_end, scanner_line, queue_begin, queue_end, scan_begin,
+                                       scan_end):
+    """
+    estimate the time that we have to spend  to move from ... to scanner in each seller line by separate to 3 groups from input
+    1. walk to scanner
+    2. wait in the scanner line
+    3. scan tickets
+    """
     wait = queue_end - queue_begin
     service_time = scan_end - scan_begin
     register_scan_wait(queue_end, wait)
@@ -144,19 +192,20 @@ def register_visitor_moving_to_scanner(person, walk_begin, walk_end, scanner_lin
         "duration": round(scan_end - scan_begin, 2)
     })
 
+
 # -------------------------
-#  UI/ANIMATION 
+#  UI/ANIMATION ( initial )
 # -------------------------
 
 main = tk.Tk()
 main.title("StandupCommady 14 Simulation")
 main.config(bg="#fff")
-# logo = tk.PhotoImage(file ="images/diew.png")
+# logo = tk.PhotoImage(file ="./images/person-icon.png")
 top_frame = tk.Frame(main)
-top_frame.pack(side=tk.TOP, expand = False)
+top_frame.pack(side=tk.TOP, expand=False)
 # tk.Label(top_frame, image = logo, bg = "#000007", height = 65, width = 1300).pack(side=tk.LEFT, expand = False)
-canvas = tk.Canvas(main, width = 1300, height = 350, bg = "white")
-canvas.pack(side=tk.TOP, expand = False)
+canvas = tk.Canvas(main, width=1300, height=350, bg="white")
+canvas.pack(side=tk.TOP, expand=False)
 
 f = plt.Figure(figsize=(2, 2), dpi=72)
 a3 = f.add_subplot(121)
@@ -166,13 +215,14 @@ a1.plot()
 a2 = f.add_subplot(224)
 a2.plot()
 data_plot = FigureCanvasTkAgg(f, master=main)
-data_plot.get_tk_widget().config(height = 400)
+data_plot.get_tk_widget().config(height=400)
 data_plot.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
 
 class QueueGraphics:
     text_height = 30
     icon_top_margin = -8
-    
+
     def __init__(self, icon_file, icon_width, queue_name, num_lines, canvas, x_top, y_top):
         self.icon_file = icon_file
         self.icon_width = icon_width
@@ -182,55 +232,74 @@ class QueueGraphics:
         self.x_top = x_top
         self.y_top = y_top
 
-        self.image = tk.PhotoImage(file = self.icon_file)
+        self.image = tk.PhotoImage(file=self.icon_file)
         self.icons = defaultdict(lambda: [])
         for i in range(num_lines):
-            canvas.create_text(x_top, y_top + (i * self.text_height), anchor = tk.NW, text = f"{queue_name} #{i + 1}")
+            canvas.create_text(x_top, y_top + (i * self.text_height), anchor=tk.NW, text=f"{queue_name} #{i + 1}")
         self.canvas.update()
 
     def add_to_line(self, seller_number):
+        """
+        add the people to ... seller line
+        """
         count = len(self.icons[seller_number])
         x = self.x_top + 60 + (count * self.icon_width)
         y = self.y_top + ((seller_number - 1) * self.text_height) + self.icon_top_margin
         self.icons[seller_number].append(
-                self.canvas.create_image(x, y, anchor = tk.NW, image = self.image)
+            self.canvas.create_image(x, y, anchor=tk.NW, image=self.image)
         )
         self.canvas.update()
 
     def remove_from_line(self, seller_number):
+        """
+        finish the step so we can delete from this line
+        """
         if len(self.icons[seller_number]) == 0: return
         to_del = self.icons[seller_number].pop()
         self.canvas.delete(to_del)
         self.canvas.update()
 
+
 def Sellers(canvas, x_top, y_top):
     return QueueGraphics("images/group.gif", 25, "Seller", SELLER_LINES, canvas, x_top, y_top)
+
 
 def Scanners(canvas, x_top, y_top):
     return QueueGraphics("images/person-resized.gif", 18, "Scanner", SCANNER_LINES, canvas, x_top, y_top)
 
+
 class BusLog:
-    TEXT_HEIGHT = 24
-    
+    """
+    Show and Track the information in the bux
+    """
+    TEXT_HEIGHT = 24 # where our text will belong
+
     def __init__(self, canvas, x_top, y_top):
         self.canvas = canvas
         self.x_top = x_top
         self.y_top = y_top
         self.bus_count = 0
-    
+
     def next_bus(self, minutes):
+        """
+        Show the text about what next bus will come at the gui
+        """
         x = self.x_top
         y = self.y_top + (self.bus_count * self.TEXT_HEIGHT)
-        self.canvas.create_text(x, y, anchor = tk.NW, text = f"Next bus in {round(minutes, 1)} minutes")
+        self.canvas.create_text(x, y, anchor=tk.NW, text=f"Next bus in {round(minutes, 1)} minutes")
         # self.bus_count = self.bus_count + 1
         self.canvas.update()
-    
+
     def bus_arrived(self, people):
+        """
+        Show the amount of arrived people in this bus
+        """
         x = self.x_top + 135
         y = self.y_top + (self.bus_count * self.TEXT_HEIGHT)
-        self.canvas.create_text(x, y, anchor = tk.NW, text = f"Arrived with {people} people", fill = "green")
+        self.canvas.create_text(x, y, anchor=tk.NW, text=f"Arrived with {people} people", fill="green")
         self.bus_count = self.bus_count + 1
         self.canvas.update()
+
 
 class ClockAndData:
     def __init__(self, canvas, x1, y1, x2, y2, time):
@@ -240,9 +309,12 @@ class ClockAndData:
         self.y2 = y2
         self.canvas = canvas
         self.train = canvas.create_rectangle(self.x1, self.y1, self.x2, self.y2, fill="#fff")
-        self.time = canvas.create_text(self.x1 + 10, self.y1 + 10, text = "Time = "+str(round(time, 1))+"m", anchor = tk.NW)
-        self.seller_wait = canvas.create_text(self.x1 + 10, self.y1 + 40, text = "Avg. Seller Wait  = "+str(avg_wait(seller_waits)), anchor = tk.NW)
-        self.scan_wait = canvas.create_text(self.x1 + 10, self.y1 + 70, text = "Avg. Scanner Wait = "+str(avg_wait(scan_waits)), anchor = tk.NW)
+        self.time = canvas.create_text(self.x1 + 10, self.y1 + 10, text="Time = " + str(round(time, 1)) + "m",
+                                       anchor=tk.NW)
+        self.seller_wait = canvas.create_text(self.x1 + 10, self.y1 + 40,
+                                              text="Avg. Seller Wait  = " + str(avg_wait(seller_waits)), anchor=tk.NW)
+        self.scan_wait = canvas.create_text(self.x1 + 10, self.y1 + 70,
+                                            text="Avg. Scanner Wait = " + str(avg_wait(scan_waits)), anchor=tk.NW)
         self.canvas.update()
 
     def tick(self, time):
@@ -250,32 +322,39 @@ class ClockAndData:
         self.canvas.delete(self.seller_wait)
         self.canvas.delete(self.scan_wait)
 
-        self.time = canvas.create_text(self.x1 + 10, self.y1 + 10, text = "Time = "+str(round(time, 1))+"m", anchor = tk.NW)
-        self.seller_wait = canvas.create_text(self.x1 + 10, self.y1 + 30, text = "Avg. Seller Wait  = "+str(avg_wait(seller_waits))+"m", anchor = tk.NW)
-        self.scan_wait = canvas.create_text(self.x1 + 10, self.y1 + 50, text = "Avg. Scanner Wait = "+str(avg_wait(scan_waits))+"m", anchor = tk.NW)
-        
+        self.time = canvas.create_text(self.x1 + 10, self.y1 + 10, text="Time = " + str(round(time, 1)) + "m",
+                                       anchor=tk.NW)
+        self.seller_wait = canvas.create_text(self.x1 + 10, self.y1 + 30,
+                                              text="Avg. Seller Wait  = " + str(avg_wait(seller_waits)) + "m",
+                                              anchor=tk.NW)
+        self.scan_wait = canvas.create_text(self.x1 + 10, self.y1 + 50,
+                                            text="Avg. Scanner Wait = " + str(avg_wait(scan_waits)) + "m", anchor=tk.NW)
+
         a1.cla()
         a1.set_xlabel("Time")
         a1.set_ylabel("Avg. Seller Wait (minutes)")
-        a1.step([ t for (t, waits) in seller_waits.items() ], [ np.mean(waits) for (t, waits) in seller_waits.items() ])
-        
+        a1.step([t for (t, waits) in seller_waits.items()], [np.mean(waits) for (t, waits) in seller_waits.items()])
+
         a2.cla()
         a2.set_xlabel("Time")
         a2.set_ylabel("Avg. Scanner Wait (minutes)")
-        a2.step([ t for (t, waits) in scan_waits.items() ], [ np.mean(waits) for (t, waits) in scan_waits.items() ])
-        
+        a2.step([t for (t, waits) in scan_waits.items()], [np.mean(waits) for (t, waits) in scan_waits.items()])
+
         a3.cla()
         a3.set_xlabel("Time")
         a3.set_ylabel("Arrivals")
-        a3.bar([ t for (t, a) in arrivals.items() ], [ a for (t, a) in arrivals.items() ])
-        
+        a3.bar([t for (t, a) in arrivals.items()], [a for (t, a) in arrivals.items()])
+
         data_plot.draw()
         self.canvas.update()
 
+
+# x_top y_top is the position that we want it to show in the gui
 bus_log = BusLog(canvas, 5, 20)
 sellers = Sellers(canvas, 340, 20)
 scanners = Scanners(canvas, 770, 20)
 clock = ClockAndData(canvas, 1100, 260, 1290, 340, 0)
+
 
 # -------------------------
 #  SIMULATION
@@ -289,7 +368,7 @@ def pick_shortest(lines):
 
         Note that the line order is shuffled so that the first queue is not disproportionally selected
     """
-    shuffled = list(zip(range(len(lines)), lines)) # tuples of (i, line)
+    shuffled = list(zip(range(len(lines)), lines))  # tuples of (i, line)
     random.shuffle(shuffled)
     shortest = shuffled[0][0]
     for i, line in shuffled:
@@ -298,15 +377,17 @@ def pick_shortest(lines):
             break
     return (lines[shortest], shortest + 1)
 
+
 def create_clock(env):
     """
         This generator is meant to be used as a SimPy event to update the clock
         and the data in the UI
     """
-    
+
     while True:
         yield env.timeout(0.1)
         clock.tick(env.now)
+
 
 def bus_arrival(env, seller_lines, scanner_lines):
     """
@@ -322,31 +403,36 @@ def bus_arrival(env, seller_lines, scanner_lines):
     while True:
         # next_bus = random.expovariate(1 / BUS_ARRIVAL_MEAN)        
         # on_board = int(random.gauss(BUS_OCCUPANCY_MEAN, BUS_OCCUPANCY_STD))        
-        next_bus = ARRIVALS.pop()
+        next_bus = ARRIVALS.pop() # bring the value that we random to use here which is the last value
         on_board = ON_BOARD.pop()
-        
+
         # Wait for the bus 
         bus_log.next_bus(next_bus)
-        yield env.timeout(next_bus)
+        yield env.timeout(next_bus) # set it as order and wait tobe trigger
         bus_log.bus_arrived(on_board)
-        
+
         # register_bus_arrival() below is for reporting purposes only 
         people_ids = list(range(next_person_id, next_person_id + on_board))
         register_bus_arrival(env.now, next_bus_id, people_ids)
         next_person_id += on_board
         next_bus_id += 1
 
+        # After Arrive then we pick the person who arrive at the line to  scann or purchase the scan
         while len(people_ids) > 0:
             remaining = len(people_ids)
             group_size = min(round(random.gauss(PURCHASE_GROUP_SIZE_MEAN, PURCHASE_GROUP_SIZE_STD)), remaining)
-            people_processed = people_ids[-group_size:] # Grab the last `group_size` elements
-            people_ids = people_ids[:-group_size] # Reset people_ids to only those remaining
+            people_processed = people_ids[-group_size:]  # Grab the last `group_size` elements
+            people_ids = people_ids[:-group_size]  # Reset people_ids to only those remaining
 
             # Randomly determine if this group is going to the sellers or straight to the scanners
+            # some can go and some cannot
             if random.random() > PURCHASE_RATIO_MEAN:
-                env.process(scanning_customer(env, people_processed, scanner_lines, TIME_TO_WALK_TO_SELLERS_MEAN + TIME_TO_WALK_TO_SCANNERS_MEAN, TIME_TO_WALK_TO_SELLERS_STD + TIME_TO_WALK_TO_SCANNERS_STD))
+                env.process(scanning_customer(env, people_processed, scanner_lines,
+                                              TIME_TO_WALK_TO_SELLERS_MEAN + TIME_TO_WALK_TO_SCANNERS_MEAN,
+                                              TIME_TO_WALK_TO_SELLERS_STD + TIME_TO_WALK_TO_SCANNERS_STD))
             else:
                 env.process(purchasing_customer(env, people_processed, seller_lines, scanner_lines))
+
 
 def purchasing_customer(env, people_processed, seller_lines, scanner_lines):
     walk_begin = env.now
@@ -354,6 +440,8 @@ def purchasing_customer(env, people_processed, seller_lines, scanner_lines):
     walk_end = env.now
 
     queue_begin = env.now
+
+    # find the shortest line
     seller_line = pick_shortest(seller_lines)
     with seller_line[0].request() as req:
         # Wait in line
@@ -367,9 +455,12 @@ def purchasing_customer(env, people_processed, seller_lines, scanner_lines):
         yield env.timeout(random.gauss(SELLER_MEAN, SELLER_STD))
         sale_end = env.now
 
-        register_group_moving_from_bus_to_seller(people_processed, walk_begin, walk_end, seller_line[1], queue_begin, queue_end, sale_begin, sale_end)
-        
-        env.process(scanning_customer(env, people_processed, scanner_lines, TIME_TO_WALK_TO_SCANNERS_MEAN, TIME_TO_WALK_TO_SCANNERS_STD))
+        register_group_moving_from_bus_to_seller(people_processed, walk_begin, walk_end, seller_line[1], queue_begin,
+                                                 queue_end, sale_begin, sale_end)
+
+        env.process(scanning_customer(env, people_processed, scanner_lines, TIME_TO_WALK_TO_SCANNERS_MEAN,
+                                      TIME_TO_WALK_TO_SCANNERS_STD))
+
 
 def scanning_customer(env, people_processed, scanner_lines, walk_duration, walk_std):
     # Walk to the seller 
@@ -378,7 +469,7 @@ def scanning_customer(env, people_processed, scanner_lines, walk_duration, walk_
     walk_end = env.now
 
     # We assume that the visitor will always pick the shortest line
-    queue_begin = env.now    
+    queue_begin = env.now
     scanner_line = pick_shortest(scanner_lines)
     with scanner_line[0].request() as req:
         # Wait in line
@@ -386,24 +477,29 @@ def scanning_customer(env, people_processed, scanner_lines, walk_duration, walk_
         yield req
         for _ in people_processed: scanners.remove_from_line(scanner_line[1])
         queue_end = env.now
-        
+
         # Scan each person's tickets 
         for person in people_processed:
             scan_begin = env.now
-            yield env.timeout(random.gauss(SCANNER_MEAN, SCANNER_STD)) # Scan their ticket
+            yield env.timeout(random.gauss(SCANNER_MEAN, SCANNER_STD))  # Scan their ticket
             scan_end = env.now
-            register_visitor_moving_to_scanner(person, walk_begin, walk_end, scanner_line[1], queue_begin, queue_end, scan_begin, scan_end)
+            register_visitor_moving_to_scanner(person, walk_begin, walk_end, scanner_line[1], queue_begin, queue_end,
+                                               scan_begin, scan_end)
 
 
-#env = simpy.rt.RealtimeEnvironment(factor = 0.01, strict = False)
+# I can config te realtime to constrol the time speed of the simulation
+# env = simpy.rt.RealtimeEnvironment(factor = 0.01)
 env = simpy.Environment()
 
-seller_lines = [ simpy.Resource(env, capacity = SELLERS_PER_LINE) for _ in range(SELLER_LINES) ]
-scanner_lines = [ simpy.Resource(env, capacity = SCANNERS_PER_LINE) for _ in range(SCANNER_LINES) ]
+# setting the parameter
+# 1. capacity of each line
+# 2. the line that we have
+seller_lines = [simpy.Resource(env, capacity=SELLERS_PER_LINE) for _ in range(SELLER_LINES)]
+scanner_lines = [simpy.Resource(env, capacity=SCANNERS_PER_LINE) for _ in range(SCANNER_LINES)]
 
 env.process(bus_arrival(env, seller_lines, scanner_lines))
 env.process(create_clock(env))
-env.run(until = 30)
+env.run(until=300)
 
 main.mainloop()
 
